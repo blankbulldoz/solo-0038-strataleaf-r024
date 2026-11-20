@@ -29,7 +29,7 @@ with Database("strataleaf.db") as db:
 
 `python3 -m compileall -q strataleaf examples` 检查源码可编译。`python3 -m examples.workflows commit` 在独立临时目录运行多集合提交、重复请求和回滚示例，打印实际结果后自动清理。可用示例名：
 
-`catalog schema commit snapshot query index feed backup replica compact expire aggregate patch inspect transfer`
+`catalog schema commit snapshot query index feed backup replica compact expire aggregate patch inspect transfer history`
 
 每个示例约一秒以内，不需要联网。它们是生产 API 的有限工作流演示；自动化测试仍为 **deferred**，仓库不含测试套件，也不声明测试命令。`examples.observations` 另外提供写锁竞争与保留水位的可复现观测。
 
@@ -38,6 +38,7 @@ with Database("strataleaf.db") as db:
 - 一个批次 1–10000 个操作，每个集合/键只能出现一次，多集合版本与索引、变更日志一同原子提交。唯一索引逐操作立即约束，交换两个已占用唯一值需先释放；基线不提供延迟唯一约束。
 - 当前目录模式约束未来写入；模式收紧先扫描当前可见文档，不重写历史。目录变动独立于文档修订，使用目录 epoch；旧文档读取消费其原始 JSON。
 - 读取固定修订号，删除写入墓碑。TTL 是显式 `retention.sweep(now)` 产生删除提交；时间经过本身不会改变读取结果。到期前版本仍能读取。
+- `history.diff(collection, since, until)` 比较两个读版本的端点内容，按文档键分页给出 `added`/`modified`/`deleted`/`recreated`/`reverted`；改回原值、创建后又删除不会被当作无变化丢弃，而由 `net_changed` 与 `writes`/`deletes` 说明。`history.commits` 在同一区间按集合/键定位相关提交。区间与游标固定读版本，分页期间的新写入不改变结果集；起点已被回收时明确失败或从 `since=None` 的保留水位开始。细节见 [历史差异](docs/history.md)。
 - 查询支持嵌套布尔谓词与等值、范围、集合成员、存在性判断，按文档键升序分页。签名游标固定集合、谓词、读版本与键边界，可调整页大小。索引只服务当前版本；历史读取回退版本扫描，最终谓词始终复核。
 - `None` 和缺失字段不同，比较缺失字段不匹配；数值比较不把布尔值当数字。分组跳过缺失分组字段，显式空值保留；非数值度量不计入平均分母。
 - 读保留点和订阅确认位置限制回收水位；分页游标本身不自动注册保留点。需要跨长时操作的调用方应先 pin；水位已超过游标时明确拒绝。回收保留水位及其后完整读视图。已登记请求的幂等回执不随历史回收删除。
@@ -47,4 +48,4 @@ with Database("strataleaf.db") as db:
 - SQLite 保证进程间单写者；同一句柄的锁协调线程操作，多个句柄通过 SQLite 锁协调。长读可能延缓 WAL checkpoint；忙超时由连接 timeout 控制，调用方处理 `sqlite3.OperationalError`。
 - 当前实现适合本地中小型嵌入式数据集，版本扫描、分组和逻辑导出会物化输入；不承诺常数内存。单文档上限 1 MiB、深度 32；筛选按键排序。磁盘加密、租户鉴权、分布式共识均不在现有承诺内。
 
-见 [完整规格](PROJECT_SPEC.md)、[数据与兼容边界](docs/storage-semantics.md)、[恢复与观测](docs/operations.md)。
+见 [完整规格](PROJECT_SPEC.md)、[数据与兼容边界](docs/storage-semantics.md)、[历史差异](docs/history.md)、[恢复与观测](docs/operations.md)。

@@ -145,6 +145,45 @@ def run(flow):
                           "duplicate": rejected(lambda: db.transfer.import_lines("copy_segments", exported["lines"]), Conflict)}
                 if len(db.query("copy_segments").records) != 6:
                     raise RuntimeError("logical import differs")
+            elif flow == "history":
+                start = first
+                db.batch("history_first").delete("segments", "seg_00").commit()
+                db.batch("history_second").put("segments", "seg_01", {"region": "south", "sequence": 21, "code": "c1"}).commit()
+                db.batch("history_third").put("segments", "seg_02", {"region": "north", "sequence": 22}).commit()
+                db.batch("history_fourth").put("segments", "seg_01", {"region": "west", "sequence": 1, "code": "c1"}).commit()
+                db.batch("history_fifth").delete("segments", "seg_03").commit()
+                db.batch("history_sixth").put("segments", "new_doc", {"region": "east", "sequence": 30}).commit()
+                db.batch("history_seventh").delete("segments", "new_doc").commit()
+                db.batch("history_eighth").put("segments", "seg_00", {"region": "east", "sequence": 0, "code": "c0"}).commit()
+                db.batch("history_ninth").put("segments", "seg_04", {"region": "east", "sequence": 4, "code": "c4"}).commit()
+                pages, cursor, until = [], None, db.revision
+                while True:
+                    page = db.history.diff("segments", start, until, limit=3, cursor=cursor)
+                    pages.append(page)
+                    cursor = page.cursor
+                    if cursor is None:
+                        break
+                changes = [item for page in pages for item in page.changes]
+                db.batch("history_after_page").put("segments", "later_doc", {"region": "west", "sequence": 40}).commit()
+                replay = db.history.diff("segments", start, until, limit=3, cursor=pages[0].cursor)
+                located = db.history.commits(start, until, collection="segments", key="seg_01")
+                foreign = rejected(lambda: db.history.commits(start, until, cursor=pages[0].cursor), InvalidCursor)
+                db.retention.compact(until - 3)
+                output = {
+                    "interval": {"since": start, "until": until},
+                    "changes": [{"key": item.key, "change": item.change, "net_changed": item.net_changed,
+                                 "writes": item.writes, "deletes": item.deletes,
+                                 "before": None if item.before is None else item.before.document,
+                                 "after": None if item.after is None else item.after.document}
+                                for item in changes],
+                    "pagination_stable": [item.key for item in replay.changes] == [item.key for item in pages[1].changes],
+                    "commits": [(entry.revision, entry.operation_count, entry.operations) for entry in located.commits],
+                    "foreign_cursor": foreign,
+                    "recycled_start": rejected(lambda: db.history.diff("segments", start, until), SnapshotTooOld),
+                    "recycled_cursor": rejected(lambda: db.history.diff("segments", cursor=pages[0].cursor), SnapshotTooOld),
+                    "retained_tail": [{"key": item.key, "change": item.change}
+                                      for item in db.history.diff("segments", until=until).changes],
+                }
             else:
                 raise ValueError("unknown example workflow: " + flow)
             print(json.dumps({"workflow": flow, "result": output}, ensure_ascii=False, sort_keys=True, default=str))

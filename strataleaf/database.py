@@ -3,6 +3,7 @@ from .archive import Archives
 from .catalog import Catalog
 from .diagnostics import Diagnostics
 from .feeds import ChangeFeed
+from .history import History
 from .indexes import Indexes
 from .mvcc import read_record
 from .patch import patch_document
@@ -27,6 +28,7 @@ class Database:
         self.aggregates = Aggregates(self._store)
         self.transfer = Transfer(self._store)
         self.diagnostics = Diagnostics(self._store)
+        self.history = History(self._store)
         self._queries = QueryEngine(self._store)
 
     @property

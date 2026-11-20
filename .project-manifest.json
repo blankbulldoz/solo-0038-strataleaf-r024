@@ -19,7 +19,8 @@
       "同一历史读版本完成分组和数值计算",
       "读后修改受版本前置条件保护",
       "物理完整性与逻辑引用一致性可观察",
-      "外部文档流验证后整批导入"
+      "外部文档流验证后整批导入",
+      "两个读版本间的净差异与相关提交可观察"
     ]
   },
   "project_shape": "backend",
@@ -225,6 +226,15 @@
       "owned_facts": "游标签名与数据库绑定",
       "consumers": [
         "query"
+      ]
+    },
+    {
+      "id": "history",
+      "path": "strataleaf/history.py",
+      "responsibility": "端点差异分类与提交定位",
+      "owned_facts": "端点差异分类与提交定位",
+      "consumers": [
+        "history"
       ]
     }
   ],
@@ -513,6 +523,25 @@
       "success": "外部文档流验证后整批导入",
       "failure": "重复键整体拒绝",
       "verification": "python3 -m examples.workflows transfer"
+    },
+    {
+      "id": "history",
+      "name": "历史比较",
+      "entry": "Database.history.diff",
+      "module_ids": [
+        "history",
+        "snapshot",
+        "cursor",
+        "storage"
+      ],
+      "steps": [
+        "输入校验与读取已有事实",
+        "端点差异分类与提交定位",
+        "形成可观察结果"
+      ],
+      "success": "两个读版本间的净差异与相关提交可观察",
+      "failure": "起点已回收或游标不匹配明确失败",
+      "verification": "python3 -m examples.workflows history"
     }
   ],
   "complexity": {
